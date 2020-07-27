@@ -1,28 +1,37 @@
 const firebase = require('firebase');
 const { db } = require('../utils/admin');
-const config = require('../utils/config');
+const bot = require('../utils/telegram');
 const {
     validateSignupData,
     validateLoginData,
     validateUpdateData,
 } = require('../utils/validators');
 
-firebase.initializeApp(config);
-
-const updateFields = (body) => {
-    const validUserFields = {};
-    const allowedKeys = ['email', 'firstName', 'lastName', 'telegramId'];
+const formatObject = (body) => {
+    const allowedFields = {};
+    const allowedKeys = ['newEmail', 'firstName', 'lastName', 'telegramId'];
 
     allowedKeys.forEach((key) => {
-        if (body[key]) {
-            validUserFields[key] = body[key];
-            if (key === 'telegramId') {
-                validUserFields.telegramVerified = false;
+        if (body[key] || body[key] === '') {
+            switch (key) {
+                case 'telegramId':
+                    allowedFields[key] = body[key];
+                    allowedFields.telegramVerified = false;
+
+                    break;
+                case 'newEmail':
+                    allowedFields.email = body[key];
+
+                    break;
+                default:
+                    allowedFields[key] = body[key];
+
+                    break;
             }
         }
     });
 
-    return validUserFields;
+    return allowedFields;
 };
 
 const sendEmailVerification = (user, res) => {
@@ -137,40 +146,49 @@ const login = (req, res) => {
 };
 
 const updateProfile = (req, res) => {
+    let updateEmailFlag = false;
     const updateUserProfile = {
         firstName: req.body.firstName,
         lastName: req.body.lastName,
-        email: req.body.newEmail,
-        newEmail: req.body.newEmail ? req.body.newEmail : '',
-        oldEmail: req.body.email,
+        newEmail: req.body.newEmail,
         telegramId: req.body.telegramId,
         password: req.body.password,
-        newPassword: req.body.newPassword
-            ? req.body.newPassword
-            : req.body.password,
+        newPassword: req.body.newPassword,
     };
 
     const { valid, errors } = validateUpdateData(updateUserProfile);
     if (!valid) return res.status(400).json(errors);
 
     db.doc(`/users/${req.user.uid}`)
-        .update(updateFields(updateUserProfile))
+        .update(formatObject(updateUserProfile))
         .then(() => {
             firebase
                 .auth()
-                .signInWithEmailAndPassword(
-                    updateUserProfile.oldEmail,
-                    updateUserProfile.password
-                )
+                .signInWithEmailAndPassword(req.user.email, req.body.password)
                 .then((doc) => {
-                    if (updateUserProfile.newEmail.length > 0) {
+                    if (updateUserProfile.newEmail) {
                         doc.user.updateEmail(updateUserProfile.newEmail);
+                        updateEmailFlag = true;
                     }
-                    if (
-                        updateUserProfile.password !==
-                        updateUserProfile.newPassword
-                    ) {
+                    if (updateUserProfile.newPassword) {
                         doc.user.updatePassword(updateUserProfile.newPassword);
+                    }
+                    if (updateUserProfile.telegramId) {
+                        const msg = `Please send /verify to activate your telegram id`;
+                        bot.telegram.sendMessage(
+                            updateUserProfile.telegramId,
+                            msg,
+                            {
+                                parse_mode: 'HTML',
+                            }
+                        );
+                    }
+
+                    if (updateEmailFlag) {
+                        return res.json({
+                            message:
+                                'Your email has been updated, please log in again.',
+                        });
                     }
                     return res.json({
                         message: 'Profile updated successfully',
