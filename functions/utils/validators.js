@@ -17,7 +17,8 @@ const validateSignupData = (data) => {
     } else if (!isEmail(data.email)) {
         errors.email = 'Must be a valid email address';
     }
-
+    if (isEmpty(data.firstName)) errors.firstName = 'Must not be empty';
+    if (isEmpty(data.lastName)) errors.lastName = 'Must not be empty';
     if (isEmpty(data.password)) errors.password = 'Must not be empty';
 
     return {
@@ -31,8 +32,28 @@ const validateLoginData = (data) => {
 
     if (isEmpty(data.email)) errors.email = 'Must not be empty';
     if (isEmpty(data.password)) errors.password = 'Must not be empty';
-
     if (Object.keys(errors).length > 0) return res.status(400).json(errors);
+
+    return {
+        errors,
+        valid: Object.keys(errors).length === 0 ? true : false,
+    };
+};
+
+const validateUpdateData = (data) => {
+    const errors = {};
+
+    if (isEmpty(data.oldEmail)) {
+        errors.email = 'Must not be empty';
+    } else if (!isEmail(data.oldEmail)) {
+        errors.email = 'Must be a valid email address';
+    }
+    if (!isEmpty(data.newEmail) && !isEmail(data.newEmail)) {
+        errors.newEmail = 'Must be a valid email address';
+    }
+    if (isEmpty(data.firstName)) errors.firstName = 'Must not be empty';
+    if (isEmpty(data.lastName)) errors.lastName = 'Must not be empty';
+    if (isEmpty(data.password)) errors.password = 'Must not be empty';
 
     return {
         errors,
@@ -43,4 +64,5 @@ const validateLoginData = (data) => {
 module.exports = {
     validateSignupData,
     validateLoginData,
+    validateUpdateData,
 };

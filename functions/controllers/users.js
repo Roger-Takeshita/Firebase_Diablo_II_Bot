@@ -4,24 +4,25 @@ const config = require('../utils/config');
 const {
     validateSignupData,
     validateLoginData,
+    validateUpdateData,
 } = require('../utils/validators');
 
 firebase.initializeApp(config);
 
 const updateFields = (body) => {
-    const updatedUserProfile = {};
+    const validUserFields = {};
     const allowedKeys = ['email', 'firstName', 'lastName', 'telegramId'];
 
     allowedKeys.forEach((key) => {
         if (body[key]) {
-            updatedUserProfile[key] = body[key];
+            validUserFields[key] = body[key];
             if (key === 'telegramId') {
-                updatedUserProfile.telegramVerified = false;
+                validUserFields.telegramVerified = false;
             }
         }
     });
 
-    return updatedUserProfile;
+    return validUserFields;
 };
 
 const sendEmailVerification = (user, res) => {
@@ -42,12 +43,15 @@ const signup = (req, res) => {
     const newUser = {
         email: req.body.email,
         password: req.body.password,
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
     };
 
     const { valid, errors } = validateSignupData(newUser);
     if (!valid) return res.status(400).json(errors);
 
-    db.doc(`/users/${newUser.email}`)
+    db.collection('users')
+        .where('email', '==', req.body.email)
         .get()
         .then((doc) => {
             if (doc.exists) {
@@ -74,7 +78,7 @@ const signup = (req, res) => {
                 telegramVerified: false,
             };
 
-            db.doc(`/users/${newUser.email}`)
+            db.doc(`/users/${data.user.uid}`)
                 .set(userProfile)
                 .then(() => {
                     return sendEmailVerification(
@@ -133,10 +137,42 @@ const login = (req, res) => {
 };
 
 const updateProfile = (req, res) => {
-    db.doc(`/users/${req.user.email}`)
-        .update(updateFields(req.body))
+    const updateUserProfile = {
+        firstName: req.body.firstName,
+        lastName: req.body.lastName,
+        email: req.body.newEmail,
+        newEmail: req.body.newEmail ? req.body.newEmail : '',
+        oldEmail: req.body.email,
+        telegramId: req.body.telegramId,
+        password: req.body.password,
+    };
+
+    const { valid, errors } = validateUpdateData(updateUserProfile);
+    if (!valid) return res.status(400).json(errors);
+
+    db.doc(`/users/${req.user.uid}`)
+        .update(updateFields(updateUserProfile))
         .then(() => {
-            return res.json({ message: 'Profile updated successfully' });
+            firebase
+                .auth()
+                .signInWithEmailAndPassword(
+                    updateUserProfile.oldEmail,
+                    updateUserProfile.password
+                )
+                .then((doc) => {
+                    if (updateUserProfile.newEmail.length > 0) {
+                        doc.user.updateEmail(updateUserProfile.newEmail);
+                    }
+                    return res.json({
+                        message: 'Profile updated successfully',
+                    });
+                })
+                .catch((error) => {
+                    console.error(error);
+                    return res
+                        .status(500)
+                        .json({ message: 'Something went wrong', error });
+                });
         })
         .catch((error) => {
             console.error(error);
@@ -145,11 +181,12 @@ const updateProfile = (req, res) => {
 };
 
 const getProfile = (req, res) => {
-    db.doc(`/users/${req.user.email}`)
+    db.doc(`/users/${req.user.uid}`)
         .get()
         .then((doc) => {
             if (doc.exists) {
                 return res.json({
+                    userId: req.user.uid,
                     firstName: doc.data().firstName,
                     lastName: doc.data().lastName,
                     email: doc.data().email,
