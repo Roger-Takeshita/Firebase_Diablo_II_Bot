@@ -145,6 +145,9 @@ const updateProfile = (req, res) => {
         oldEmail: req.body.email,
         telegramId: req.body.telegramId,
         password: req.body.password,
+        newPassword: req.body.newPassword
+            ? req.body.newPassword
+            : req.body.password,
     };
 
     const { valid, errors } = validateUpdateData(updateUserProfile);
@@ -162,6 +165,12 @@ const updateProfile = (req, res) => {
                 .then((doc) => {
                     if (updateUserProfile.newEmail.length > 0) {
                         doc.user.updateEmail(updateUserProfile.newEmail);
+                    }
+                    if (
+                        updateUserProfile.password !==
+                        updateUserProfile.newPassword
+                    ) {
+                        doc.user.updatePassword(updateUserProfile.newPassword);
                     }
                     return res.json({
                         message: 'Profile updated successfully',

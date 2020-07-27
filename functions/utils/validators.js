@@ -54,6 +54,7 @@ const validateUpdateData = (data) => {
     if (isEmpty(data.firstName)) errors.firstName = 'Must not be empty';
     if (isEmpty(data.lastName)) errors.lastName = 'Must not be empty';
     if (isEmpty(data.password)) errors.password = 'Must not be empty';
+    if (isEmpty(data.newPassword)) errors.newPassword = 'Must not be empty';
 
     return {
         errors,
