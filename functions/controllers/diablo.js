@@ -27,6 +27,7 @@ const formatObject = (body) => {
 };
 
 const notify = (req, res) => {
+    let msg = '';
     const request = formatObject(req.body);
     const { valid, errors } = validateLoginData(request);
     if (!valid) return res.status(400).json(errors);
@@ -52,15 +53,30 @@ const notify = (req, res) => {
                         doc.data().telegramId !== '' &&
                         doc.data().telegramVerified
                     ) {
-                        return res.send('telegram verified');
-                    } else if (doc.data().telegramId !== '') {
-                        const msg = `Not verified Telegram ID, please send /verify to activate your telegram notification`;
+                        msg = `Custom notification from the game`;
                         bot.telegram.sendMessage(doc.data().telegramId, msg, {
                             parse_mode: 'HTML',
                         });
-                        return res.send('telegram not verified');
+
+                        return res.send();
+                    } else if (doc.data().telegramId !== '') {
+                        msg = `Telegram ID not verified, please send /verify to link your telegram with ${
+                            doc.data().email
+                        }`;
+                        bot.telegram.sendMessage(doc.data().telegramId, msg, {
+                            parse_mode: 'HTML',
+                        });
+
+                        return res
+                            .status(400)
+                            .json({ message: 'Telegram ID not verified' });
                     } else {
-                        return res.send('empty telegram id');
+                        return res
+                            .status(400)
+                            .json({
+                                message:
+                                    'This Telegram ID is not linked to any user. Please visit ',
+                            });
                     }
                 });
         })

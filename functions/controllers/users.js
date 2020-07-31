@@ -135,17 +135,21 @@ const login = (req, res) => {
         .catch((error) => {
             console.error(error);
 
-            if (error.code === 'auth/wrong-password') {
-                return res
-                    .status(403)
-                    .json({ general: 'Wrong credentials, please try again' });
+            if (
+                error.code === 'auth/wrong-password' ||
+                error.code === 'auth/user-not-found'
+            ) {
+                return res.status(403).json({
+                    general:
+                        'Wrong credentials, make sure email and password are correct',
+                });
             }
 
             return res.status(500).json({ error: error.code });
         });
 };
 
-const updateProfile = (req, res) => {
+const updateProfile = async (req, res) => {
     let updateEmailFlag = false;
     const updateUserProfile = {
         firstName: req.body.firstName,
@@ -158,6 +162,19 @@ const updateProfile = (req, res) => {
 
     const { valid, errors } = validateUpdateData(updateUserProfile);
     if (!valid) return res.status(400).json(errors);
+
+    if (updateUserProfile.telegramId.length > 0) {
+        const telegramInUse = await db
+            .collection('users')
+            .where('telegramId', '==', `${updateUserProfile.telegramId}`)
+            .get();
+
+        if (telegramInUse) {
+            return res
+                .status(400)
+                .json({ message: 'Telegram ID already in use' });
+        }
+    }
 
     db.doc(`/users/${req.user.uid}`)
         .update(formatObject(updateUserProfile))
@@ -174,7 +191,11 @@ const updateProfile = (req, res) => {
                         doc.user.updatePassword(updateUserProfile.newPassword);
                     }
                     if (updateUserProfile.telegramId) {
-                        const msg = `Please send /verify to activate your telegram id`;
+                        const msg = `Telegram ID not verified, please send /verify to link your telegram with ${
+                            updateUserProfile.newEmail
+                                ? updateUserProfile.newEmail
+                                : req.user.email
+                        }`;
                         bot.telegram.sendMessage(
                             updateUserProfile.telegramId,
                             msg,
