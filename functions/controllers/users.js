@@ -34,21 +34,19 @@ const formatObject = (body) => {
     return allowedFields;
 };
 
-const sendEmailVerification = (user, res) => {
-    user.sendEmailVerification()
-        .then(() => {
-            return res.json({
-                message: `An email was sent to ${user.email}, please verify your email first.`,
-            });
-        })
-        .catch((error) => {
-            return res
-                .status(500)
-                .json({ message: 'Something went wrong', error });
+const sendEmailVerification = async (user, res) => {
+    try {
+        await user.sendEmailVerification();
+        return res.json({
+            message: `An email was sent to ${user.email}, please verify your email first and try again.`,
         });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Something went wrong', error });
+    }
 };
 
-const signup = (req, res) => {
+const signup = async (req, res) => {
     const newUser = {
         email: req.body.email,
         password: req.body.password,
@@ -59,94 +57,71 @@ const signup = (req, res) => {
     const { valid, errors } = validateSignupData(newUser);
     if (!valid) return res.status(400).json(errors);
 
-    db.collection('users')
-        .where('email', '==', req.body.email)
-        .get()
-        .then((doc) => {
-            if (doc.exists) {
-                return res
-                    .status(400)
-                    .json({ message: 'This email is already taken' });
-            } else {
-                return firebase
-                    .auth()
-                    .createUserWithEmailAndPassword(
-                        newUser.email,
-                        newUser.password
-                    );
-            }
-        })
-        .then((data) => {
-            const userProfile = {
-                email: newUser.email,
-                createdAt: new Date().toISOString(),
-                userId: data.user.uid,
-                firstName: req.body.firstName,
-                lastName: req.body.lastName,
-                telegramId: '',
-                telegramVerified: false,
-            };
+    try {
+        const newUserAuthentication = await firebase
+            .auth()
+            .createUserWithEmailAndPassword(newUser.email, newUser.password);
 
-            db.doc(`/users/${data.user.uid}`)
-                .set(userProfile)
-                .then(() => {
-                    return sendEmailVerification(
-                        firebase.auth().currentUser,
-                        res
-                    );
-                })
-                .catch((error) => {
-                    return res
-                        .status(500)
-                        .json({ message: 'Something went wrong' });
-                });
-        })
-        .catch((error) => {
-            console.error(error);
-            if (error.code === 'auth/email-already-in-use') {
-                return res
-                    .status(400)
-                    .json({ error: 'Email is already in use' });
-            }
-            return res.status(500).json({ error: error.code });
-        });
+        const newUserProfile = {
+            email: req.body.email,
+            userId: newUserAuthentication.user.uid,
+            createdAt: new Date().toISOString(),
+            firstName: req.body.firstName,
+            lastName: req.body.lastName,
+            telegramId: '',
+            telegramVerified: false,
+        };
+
+        await db
+            .doc(`/users/${newUserAuthentication.user.uid}`)
+            .set(newUserProfile);
+        return sendEmailVerification(newUserAuthentication.user, res);
+    } catch (error) {
+        console.error(error);
+
+        if (error.code === 'auth/email-already-in-use') {
+            return res.status(400).json({ error: 'Email is already in use' });
+        }
+
+        return res.status(500).json({ error: error.code });
+    }
 };
 
-const login = (req, res) => {
+const login = async (req, res) => {
     const user = {
         email: req.body.email,
         password: req.body.password,
     };
+
     const { valid, errors } = validateLoginData(user);
     if (!valid) return res.status(400).json(errors);
 
-    firebase
-        .auth()
-        .signInWithEmailAndPassword(user.email, user.password)
-        .then((data) => {
-            if (!data.user.emailVerified) {
-                return sendEmailVerification(data.user, res);
-            }
+    try {
+        const request = await firebase
+            .auth()
+            .signInWithEmailAndPassword(user.email, user.password);
 
-            return data.user.getIdToken().then((token) => {
-                return res.json({ token });
+        if (!request.user.emailVerified) {
+            return sendEmailVerification(request.user, res);
+        }
+
+        const token = await request.user.getIdToken();
+        return res.json({ token });
+    } catch (error) {
+        console.error(error);
+
+        if (
+            error.code === 'auth/wrong-password' ||
+            error.code === 'auth/user-not-found'
+        ) {
+            return res.status(403).json({
+                message:
+                    'Wrong credentials, make sure email and password are correct',
             });
-        })
-        .catch((error) => {
-            console.error(error);
+        }
 
-            if (
-                error.code === 'auth/wrong-password' ||
-                error.code === 'auth/user-not-found'
-            ) {
-                return res.status(403).json({
-                    general:
-                        'Wrong credentials, make sure email and password are correct',
-                });
-            }
-
-            return res.status(500).json({ error: error.code });
-        });
+        return res.status(500).json({ error: error.code });
+    }
 };
 
 const updateProfile = async (req, res) => {
@@ -163,92 +138,105 @@ const updateProfile = async (req, res) => {
     const { valid, errors } = validateUpdateData(updateUserProfile);
     if (!valid) return res.status(400).json(errors);
 
-    if (updateUserProfile.telegramId.length > 0) {
-        const telegramInUse = await db
-            .collection('users')
-            .where('telegramId', '==', `${updateUserProfile.telegramId}`)
-            .get();
-
-        if (telegramInUse) {
+    if (
+        updateUserProfile.telegramId &&
+        updateUserProfile.telegramId.length > 0
+    ) {
+        try {
+            const data = await db
+                .collection('users')
+                .where('telegramId', '==', `${updateUserProfile.telegramId}`)
+                .get();
+            if (!data) {
+                return res
+                    .status(400)
+                    .json({ message: 'Telegram ID already in use' });
+            }
+        } catch (error) {
+            console.error(error);
             return res
-                .status(400)
-                .json({ message: 'Telegram ID already in use' });
+                .status(500)
+                .json({ message: 'Something went wrong', error });
         }
     }
 
-    db.doc(`/users/${req.user.uid}`)
-        .update(formatObject(updateUserProfile))
-        .then(() => {
-            firebase
-                .auth()
-                .signInWithEmailAndPassword(req.user.email, req.body.password)
-                .then((doc) => {
-                    if (updateUserProfile.newEmail) {
-                        doc.user.updateEmail(updateUserProfile.newEmail);
-                        updateEmailFlag = true;
-                    }
-                    if (updateUserProfile.newPassword) {
-                        doc.user.updatePassword(updateUserProfile.newPassword);
-                    }
-                    if (updateUserProfile.telegramId) {
-                        const msg = `Telegram ID not verified, please send /verify to link your telegram with ${
-                            updateUserProfile.newEmail
-                                ? updateUserProfile.newEmail
-                                : req.user.email
-                        }`;
-                        bot.telegram.sendMessage(
-                            updateUserProfile.telegramId,
-                            msg,
-                            {
-                                parse_mode: 'HTML',
-                            }
-                        );
-                    }
+    try {
+        const request = await firebase
+            .auth()
+            .signInWithEmailAndPassword(req.user.email, req.body.password);
 
-                    if (updateEmailFlag) {
-                        return res.json({
-                            message:
-                                'Your email has been updated, please log in again.',
-                        });
-                    }
-                    return res.json({
-                        message: 'Profile updated successfully',
-                    });
-                })
-                .catch((error) => {
-                    console.error(error);
-                    return res
-                        .status(500)
-                        .json({ message: 'Something went wrong', error });
-                });
-        })
-        .catch((error) => {
-            console.error(error);
-            return res.status(500).json({ error: error.code });
-        });
-};
+        if (updateUserProfile.newEmail) {
+            await request.user.updateEmail(updateUserProfile.newEmail);
+            updateEmailFlag = true;
+        }
+        if (updateUserProfile.newPassword) {
+            await request.user.updatePassword(updateUserProfile.newPassword);
+        }
 
-const getProfile = (req, res) => {
-    db.doc(`/users/${req.user.uid}`)
-        .get()
-        .then((doc) => {
-            if (doc.exists) {
-                return res.json({
-                    userId: req.user.uid,
-                    firstName: doc.data().firstName,
-                    lastName: doc.data().lastName,
-                    email: doc.data().email,
-                    telegramId: doc.data().telegramId
-                        ? doc.data().telegramId
-                        : '',
-                    telegramVerified: doc.data().telegramVerified,
+        const updateSomething = formatObject(updateUserProfile);
+        if (Object.keys(updateSomething).length > 0) {
+            await db.doc(`/users/${req.user.uid}`).update(updateSomething);
+
+            if (updateUserProfile.telegramId) {
+                const msg = `Telegram ID not verified, please send /verify to link your telegram with ${
+                    updateUserProfile.newEmail
+                        ? updateUserProfile.newEmail
+                        : req.user.email
+                }`;
+                bot.telegram.sendMessage(updateUserProfile.telegramId, msg, {
+                    parse_mode: 'HTML',
                 });
             }
-        })
-        .catch((error) => {
-            console.error(error);
-            return res.status(500).json({ error: error.code });
+        }
+
+        if (updateEmailFlag) {
+            return res.json({
+                message: 'Your email has been updated, please log in again.',
+            });
+        }
+
+        if (updateSomething.length > 0) {
+            return res.json({
+                message: 'Profile has been updated successfully',
+            });
+        }
+
+        return res.json({
+            message: 'Password has been updated successfully',
         });
+    } catch (error) {
+        console.error(error);
+
+        if (error.code === 'auth/wrong-password') {
+            return res.status(403).json({
+                message: 'Wrong password, make sure your password is correct',
+            });
+        }
+
+        return res.status(500).json({ error: error.code });
+    }
+};
+
+const getProfile = async (req, res) => {
+    try {
+        const doc = await db.doc(`/users/${req.user.uid}`).get();
+
+        if (doc.exists) {
+            const userProfile = {
+                firstName: doc.data().firstName,
+                lastName: doc.data().lastName,
+                email: req.user.email,
+                telegramId: doc.data().telegramId ? doc.data().telegramId : '',
+                telegramVerified: doc.data().telegramVerified,
+            };
+            return res.json(userProfile);
+        }
+
+        return res.status(404).json({ message: 'User not found' });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: error.code });
+    }
 };
 
 module.exports = {

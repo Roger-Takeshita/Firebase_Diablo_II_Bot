@@ -10,7 +10,6 @@ const bot = require('./utils/telegram');
 
 const app = express();
 firebase.initializeApp(config);
-bot.launch();
 
 app.use(cors({ origin: true }));
 app.use(express.json());

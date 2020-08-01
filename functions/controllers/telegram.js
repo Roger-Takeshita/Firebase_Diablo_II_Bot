@@ -3,14 +3,19 @@ const bot = require('../utils/telegram');
 
 const isUserRegistered = async (chatId) => {
     let user = {};
-    const docs = await db
-        .collection('users')
-        .where('telegramId', '==', `${chatId}`)
-        .get();
 
-    docs.forEach((doc) => {
-        user = doc.data();
-    });
+    try {
+        const docs = await db
+            .collection('users')
+            .where('telegramId', '==', `${chatId}`)
+            .get();
+
+        docs.forEach((doc) => {
+            user = doc.data();
+        });
+    } catch (error) {
+        throw new Error(error);
+    }
 
     if (user.email) return user;
 
@@ -33,6 +38,7 @@ bot.command('/verify', async ({ from: { id: chatId } }) => {
         } catch (error) {
             throw new Error(error);
         }
+
         msg = 'Your account has been linked successfully.';
     }
 
