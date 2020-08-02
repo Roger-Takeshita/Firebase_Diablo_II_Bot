@@ -195,7 +195,7 @@ const updateProfile = async (req, res) => {
             });
         }
 
-        if (updateSomething.length > 0) {
+        if (Object.keys(updateSomething).length > 0) {
             return res.json({
                 message: 'Profile has been updated successfully',
             });
