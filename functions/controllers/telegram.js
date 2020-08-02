@@ -45,4 +45,4 @@ bot.command('/verify', async ({ from: { id: chatId } }) => {
     bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' });
 });
 
-bot.launch().catch();
+bot.launch();

@@ -38,15 +38,16 @@ const sendEmailVerification = async (user, res) => {
     try {
         await user.sendEmailVerification();
         return res.json({
-            message: `An email was sent to ${user.email}, please verify your email first and try again.`,
+            message: `An email was sent to ${user.email}, please verify first and before log in.`,
         });
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ message: 'Something went wrong', error });
+        throw new Error(
+            'Unable to send the email verification, please try again later.'
+        );
     }
 };
 
-const signup = async (req, res) => {
+const signup = async (req, res, next) => {
     const newUser = {
         email: req.body.email,
         password: req.body.password,
@@ -77,13 +78,12 @@ const signup = async (req, res) => {
             .set(newUserProfile);
         return sendEmailVerification(newUserAuthentication.user, res);
     } catch (error) {
-        console.error(error);
-
         if (error.code === 'auth/email-already-in-use') {
-            return res.status(400).json({ error: 'Email is already in use' });
+            res.status(400);
+            next({ message: 'Email is already in use' });
         }
 
-        return res.status(500).json({ error: error.code });
+        next(error);
     }
 };
 
@@ -108,23 +108,22 @@ const login = async (req, res) => {
         const token = await request.user.getIdToken();
         return res.json({ token });
     } catch (error) {
-        console.error(error);
-
         if (
             error.code === 'auth/wrong-password' ||
             error.code === 'auth/user-not-found'
         ) {
-            return res.status(403).json({
+            res.status(403);
+            next({
                 message:
                     'Wrong credentials, make sure email and password are correct',
             });
         }
 
-        return res.status(500).json({ error: error.code });
+        next(error);
     }
 };
 
-const updateProfile = async (req, res) => {
+const updateProfile = async (req, res, next) => {
     let updateEmailFlag = false;
     const updateUserProfile = {
         firstName: req.body.firstName,
@@ -148,15 +147,11 @@ const updateProfile = async (req, res) => {
                 .where('telegramId', '==', `${updateUserProfile.telegramId}`)
                 .get();
             if (!data) {
-                return res
-                    .status(400)
-                    .json({ message: 'Telegram ID already in use' });
+                res.status(400);
+                next({ message: 'Telegram ID already in use' });
             }
         } catch (error) {
-            console.error(error);
-            return res
-                .status(500)
-                .json({ message: 'Something went wrong', error });
+            next(error);
         }
     }
 
@@ -208,12 +203,13 @@ const updateProfile = async (req, res) => {
         console.error(error);
 
         if (error.code === 'auth/wrong-password') {
-            return res.status(403).json({
+            res.status(403);
+            next({
                 message: 'Wrong password, make sure your password is correct',
             });
         }
 
-        return res.status(500).json({ error: error.code });
+        next(error);
     }
 };
 
@@ -232,10 +228,10 @@ const getProfile = async (req, res) => {
             return res.json(userProfile);
         }
 
-        return res.status(404).json({ message: 'User not found' });
+        res.status(404);
+        next({ message: 'User not found' });
     } catch (error) {
-        console.error(error);
-        return res.status(500).json({ error: error.code });
+        next(error);
     }
 };
 

@@ -43,13 +43,20 @@ const notify = async (req, res, next) => {
             return sendEmailVerification(data.user, res);
         }
 
-        const user = await db.doc(`/users/${authenticatedUser.user.uid}`).get();
+        const doc = await db.doc(`/users/${authenticatedUser.user.uid}`).get();
 
-        if (!user.exists) {
-            return res.status(404).json({ message: 'User not found' });
+        if (!doc.exists) {
+            res.status(404);
+            next({ message: 'User not found' });
         }
 
-        if (user.data().telegramId !== '' && user.data().telegramVerified) {
+        const user = {
+            email: doc.data().email,
+            telegramId: doc.data().telegramId,
+            telegramVerified: doc.data().telegramVerified,
+        };
+
+        if (user.telegramId !== '' && user.telegramVerified) {
             switch (request.code) {
                 case 'Diablo Clone':
                     chatId = groupId;
@@ -62,7 +69,7 @@ const notify = async (req, res, next) => {
 
                     break;
                 case 'Trade':
-                    chatId = user.data().telegramId;
+                    chatId = user.telegramId;
                     msg = `<b>${request.message}</b>
 
                     <u><b>PROFILE:</b> ${request.profile}</u>
@@ -84,29 +91,24 @@ const notify = async (req, res, next) => {
             });
 
             return res.send('Server received your message');
-        } else if (doc.data().telegramId !== '') {
-            msg = `Telegram ID not verified, please send /verify to link your telegram with ${
-                doc.data().email
-            }`;
-            bot.telegram.sendMessage(doc.data().telegramId, msg, {
+        } else if (user.telegramId !== '') {
+            msg = `Telegram ID ( ${user.telegramId} ) not verified, please send /verify to link your telegram with ${user.email}`;
+            bot.telegram.sendMessage(user.telegramId, msg, {
                 parse_mode: 'HTML',
             });
 
-            return res
-                .status(400)
-                .json({ message: 'Telegram ID not verified' });
+            res.status(400);
+            next({ message: 'Telegram ID not verified' });
         } else {
-            return res.status(400).json({
-                message: 'This Telegram ID is not linked to any user.',
-            });
+            res.status(400);
+            next({ message: 'This Telegram ID is not linked to any user.' });
         }
     } catch (error) {
-        console.error(error);
-
         if (error.code === 'auth/wrong-password') {
             res.status(403);
             next({ message: 'Wrong credentials, please try again' });
         }
+
         next(error);
     }
 };

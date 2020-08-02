@@ -7,6 +7,7 @@ const config = require('./utils/config');
 const usersPath = require('./routes/users');
 const diabloPath = require('./routes/diablo');
 const bot = require('./utils/telegram');
+require('./controllers/telegram');
 
 const app = express();
 firebase.initializeApp(config);
@@ -14,7 +15,6 @@ firebase.initializeApp(config);
 app.use(cors({ origin: true }));
 app.use(express.json());
 
-require('./controllers/telegram');
 app.use('/users', usersPath);
 app.use('/diablo', diabloPath);
 
@@ -26,8 +26,7 @@ bot.catch((error, ctx) => {
 app.use((error, req, res, next) => {
     const statusCode = res.statusCode === 200 ? 400 : res.statusCode;
     console.error(error);
-    res.status(statusCode);
-    res.json({
+    res.status(statusCode).json({
         message: error.message,
     });
 });
