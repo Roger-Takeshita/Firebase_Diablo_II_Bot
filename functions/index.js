@@ -31,4 +31,6 @@ app.use((error, req, res, next) => {
     });
 });
 
+bot.launch();
+
 exports.api = functions.https.onRequest(app);

