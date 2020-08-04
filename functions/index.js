@@ -6,10 +6,10 @@ const config = require('./utils/config');
 
 const usersPath = require('./routes/users');
 const diabloPath = require('./routes/diablo');
-const bot = require('./utils/telegram');
-require('./controllers/telegram');
+const telegramPath = require('./routes/telegram');
 
 const app = express();
+const bot = require('./utils/telegram');
 firebase.initializeApp(config);
 
 app.use(cors({ origin: true }));
@@ -17,6 +17,7 @@ app.use(express.json());
 
 app.use('/users', usersPath);
 app.use('/diablo', diabloPath);
+app.use('/telegram', telegramPath);
 
 bot.catch((error, ctx) => {
     console.log(`Ooops, encountered an error for ${ctx.updateType}`, error);
@@ -30,7 +31,5 @@ app.use((error, req, res, next) => {
         message: error.message,
     });
 });
-
-bot.launch();
 
 exports.api = functions.https.onRequest(app);

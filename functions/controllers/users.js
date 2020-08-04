@@ -178,9 +178,14 @@ const updateProfile = async (req, res, next) => {
                         ? updateUserProfile.newEmail
                         : req.user.email
                 }`;
-                bot.telegram.sendMessage(updateUserProfile.telegramId, msg, {
-                    parse_mode: 'HTML',
-                });
+
+                await bot.telegram.sendMessage(
+                    updateUserProfile.telegramId,
+                    msg,
+                    {
+                        parse_mode: 'HTML',
+                    }
+                );
             }
         }
 

@@ -1,14 +1,12 @@
 const { db } = require('../utils/admin');
-const bot = require('../utils/telegram');
-const Markup = require('telegraf/markup');
 
-const isUserRegistered = async (chatId) => {
+const isUserRegistered = async (chat_id, res) => {
     let user = {};
 
     try {
         const docs = await db
             .collection('users')
-            .where('telegramId', '==', `${chatId}`)
+            .where('telegramId', '==', `${chat_id}`)
             .get();
 
         docs.forEach((doc) => {
@@ -21,8 +19,15 @@ const isUserRegistered = async (chatId) => {
     if (user.email) return user;
 
     //TODO build a front-end
-    const msg = `User not found, please sign in <a href="https://rogertakeshita.com">here</a>`;
-    bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' });
+    const msg = `Your Telegram ID ( ${chat_id} ) is not linked to a registered user. Please visit the <a href="https://rogertakeshita.com">link</a>`;
+
+    await res.send({
+        method: 'sendMessage',
+        chat_id,
+        text: msg,
+        parse_mode: 'HTML',
+    });
+
     return false;
 };
 
@@ -34,134 +39,205 @@ const isLinkExists = async (user, link) => {
             .where('link', '==', link)
             .get();
 
-        if (docs.exists) {
-            const links = [];
-            docs.forEach((doc) => {
-                links.push(doc.link);
-            });
-            return links;
-        }
-        return false;
+        const links = [];
+        docs.forEach((doc) => {
+            links.push(doc.link);
+        });
+        return links;
     } catch (error) {
         throw new Error(error);
     }
 };
 
-bot.command('/verify', async ({ from: { id: chatId } }) => {
-    let msg = '';
-    const user = await isUserRegistered(chatId);
+const getLinks = async (user) => {
+    try {
+        let strLinks = '';
+        let countLinks = 0;
+        const docs = await db
+            .collection('links')
+            .where('userId', '==', user.userId)
+            .get();
 
-    if (user && user.telegramVerified) {
-        msg = 'Your account is already linked.';
-    } else {
-        try {
-            await db
-                .doc(`/users/${user.userId}`)
-                .update({ telegramVerified: true });
-        } catch (error) {
-            throw new Error(error);
+        docs.forEach((doc) => {
+            strLinks += `
+    <b>---></b> <a href="${doc.data().link}">${doc.data().link}</a>`;
+            countLinks++;
+        });
+
+        if (countLinks === 0) {
+            return `You don't have any link.`;
         }
 
-        msg = 'Your account has been linked successfully.';
-    }
-
-    bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' });
-});
-
-bot.command(
-    '/me',
-    ({ from: { id: chatId, first_name, last_name, username } }) => {
-        const msg = `Here is your profile:
-
-        <u>First name:</u>    ${first_name}
-        <u>Last name:</u>    ${last_name}
-        <u>Username:</u>    <a href="tg://username?id=${username}">${username}</a>
-        <u>Direct msg:</u>   <a href="t.me/${username}">t.me/${username}</a>
-        <u>Telegram ID:</u>  <a href="tg://user?id=${chatId}">${chatId}</a>
-    `;
-
-        bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' });
-    }
-);
-
-bot.command('/links', async ({ from: { id: chatId } }) => {
-    let msg = '';
-
-    const user = await isUserRegistered(chatId);
-    const links = await db
-        .collection('links')
-        .where('userId', '==', user.userId)
-        .get();
-
-    if (links.length === 0) {
-        msg = `You don't have any link.`;
-        return bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' });
-    }
-
-    let strLinks = '';
-    links.forEach((item) => {
-        strLinks += `
-    <b>---></b> <a href="${item.data().link}">${item.data().link}</a>
-        `;
-    });
-
-    msg = `Here are your links ${links.length}:
+        return `Found ${countLinks} link${countLinks > 1 ? 's' : ''}:
     ${strLinks}`;
+    } catch (error) {
+        throw new Error(error);
+    }
+};
 
-    bot.telegram.sendMessage(chatId, msg, { parse_mode: 'HTML' });
-});
+const incomingMsg = async (req, res) => {
+    const telegramText =
+        req.body &&
+        req.body.message &&
+        req.body.message.chat &&
+        req.body.message.chat.id &&
+        req.body.message.from &&
+        req.body.message.from.first_name;
 
-bot.command('/help', ({ chat: { type, id: chatId } }) => {
-    let msg = '';
-    let keyboard = [];
-    let keyboardConfig = {};
+    if (telegramText) {
+        let user;
+        let chat_id;
+        let msg = '';
+        const type = req.body.message.chat.type;
+        const userChatId = req.body.message.from.id;
+        const userGroupChatId = req.body.message.chat.id;
+        const first_name = req.body.message.from.first_name;
+        const last_name = req.body.message.from.last_name;
+        const username = req.body.message.from.username;
+        const incomingMessage = req.body.message.text;
 
-    if (type === 'group') {
-        // msg = `Available Group Commands
-        // /command1 ->
-        // /command2 ->
-        // /command3 ->
-        // /help
-        //     `;
-        // keyboard = ['/command1', '/command2', '/command3', '/help'];
-        // keyboardConfig = { columns: 2, rows: 2 };
-    } else {
-        msg = `
-        <u>Commands:</u>
+        switch (incomingMessage) {
+            case '/me':
+                chat_id = userChatId;
+                msg = `<b>Here is your profile:</b>
+
+            <u><b>First Name:</b></u>    ${first_name}
+            <u><b>Last Name:</b></u>    ${last_name}
+            <u><b>Username:</b></u>    <a href="tg://username?id=${username}">${username}</a>
+            <u><b>Direct Msg:</b></u>   <a href="t.me/${username}">t.me/${username}</a>
+            <u><b>Telegram ID:</b></u>  <a href="tg://user?id=${chat_id}">${chat_id}</a>`;
+
+                break;
+            case '/verify':
+                chat_id = userChatId;
+                user = await isUserRegistered(chat_id, res);
+
+                if (user && user.telegramVerified) {
+                    msg = 'Your account is already linked.';
+                } else {
+                    try {
+                        await db
+                            .doc(`/users/${user.userId}`)
+                            .update({ telegramVerified: true });
+                    } catch (error) {
+                        throw new Error(error);
+                    }
+
+                    msg = 'Your account has been linked successfully.';
+                }
+
+                break;
+            case '/start':
+            case '/help':
+                chat_id = userGroupChatId;
+                let keyboard = [];
+
+                if (type === 'group') {
+                    msg = `<u>Available Group Commands</u>
+
+            /verify - link telegram account
+            /help - available commands`;
+
+                    keyboard = [['/verify', '/help']];
+                } else {
+                    msg = `<u>Commands:</u>
+                
             /me - get your profile info
             /verify - link telegram account
-            /help - available commands
-            `;
-        keyboard = ['/me', '/verify', '/help'];
-        keyboardConfig = { columns: 2, rows: 2 };
-    }
+            /links - show all saved links
+            /help - available commands`;
 
-    bot.telegram.sendMessage(
-        chatId,
-        msg,
-        Markup.keyboard(keyboard, keyboardConfig)
-            .oneTime()
-            .resize()
-            .extra({ parse_mode: 'HTML' })
-    );
-});
+                    keyboard = [
+                        ['/me', '/verify'],
+                        ['/links', '/help'],
+                    ];
+                }
 
-bot.hears(
-    /^(http|https|ftp|ftps)\:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(\/\S*)?/i,
-    async ({ from: { id: chatId }, match }) => {
-        let msg = '';
-        const link = match[0].toLowerCase();
-        const user = await isUserRegistered(chatId);
+                return res.send({
+                    method: 'sendMessage',
+                    chat_id,
+                    text: msg,
+                    reply_markup: {
+                        keyboard,
+                        resize_keyboard: true,
+                        one_time_keyboard: true,
+                    },
+                    parse_mode: 'HTML',
+                });
+            case '/body':
+                chat_id = userGroupChatId;
+                user = isUserRegistered(chat_id, res);
 
-        const linkExists = await isLinkExists(user, link);
-        if (linkExists) {
-            msg = `This link already exists!`;
-        } else {
-            msg = `I got you: ${link}, ${linkExists} ${JSON.stringify(user)}`;
+                if (user) {
+                    msg = JSON.stringify(req.body, undefined, 3);
+                } else {
+                    msg = `You Telegram ID ( ${user.telegramId} ) has not been verified, please send /verify to link your telegram with ${user.email}`;
+                }
+
+                break;
+            case '/links':
+                chat_id = userChatId;
+                user = await isUserRegistered(chat_id, res);
+
+                if (user && user.telegramVerified) {
+                    msg = await getLinks(user);
+                } else if (user && !user.telegramVerified) {
+                    msg = `Your Telegram ID ( ${user.telegramId} ) has not been verified, please send /verify to link your telegram with ${user.email}`;
+                }
+
+                break;
+            default:
+                chat_id = userChatId;
+                user = await isUserRegistered(chat_id, res);
+
+                if (user && type === 'private') {
+                    const regEx = /^(http|https|ftp|ftps)\:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(\/\S*)?/i;
+                    const isAnUrl = incomingMessage.match(regEx);
+
+                    if (isAnUrl) {
+                        const link = isAnUrl[0];
+                        const links = await isLinkExists(user, link);
+
+                        if (links.length > 0) {
+                            msg = 'This link already exists!';
+                            return res.send({
+                                method: 'sendMessage',
+                                chat_id,
+                                text: msg,
+                                parse_mode: 'HTML',
+                            });
+                        }
+
+                        return await db
+                            .collection('links')
+                            .add({ link, userId: user.userId });
+                    }
+
+                    return res.send({
+                        method: 'sendMessage',
+                        chat_id,
+                        text: `Hello ${first_name}, \n You sent us message: ${incomingMessage}`,
+                        parse_mode: 'HTML',
+                    });
+                }
+
+                break;
         }
 
-        bot.telegram.sendMessage(chatId, msg, {
+        return res.send({
+            method: 'sendMessage',
+            chat_id,
+            text: msg,
             parse_mode: 'HTML',
         });
     }
-);
+
+    return res.send({
+        method: 'sendMessage',
+        chat_id,
+        text: 'Something went wrong!',
+        parse_mode: 'HTML',
+    });
+};
+
+module.exports = { incomingMsg };

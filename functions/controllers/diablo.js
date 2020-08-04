@@ -73,10 +73,10 @@ const notify = async (req, res, next) => {
                     break;
                 case 'Trade':
                     chatId = user.telegramId;
-                    msg = `<b>${request.message}</b></u>
+                    msg = `<b>${request.message}</b>
 
-                    <b>PROFILE:</b></u> ${request.profile}
-                    <b>GAME:</b></u> ${request.gameName}`;
+                    <u><b>PROFILE:</b></u> ${request.profile}
+                    <u><b>GAME:</b></u> ${request.gameName}`;
 
                     break;
                 case 'Soj':
@@ -92,20 +92,24 @@ const notify = async (req, res, next) => {
 
                     <u><b>CODE:</b> ${request.code}</u>
                     <u><b>PROFILE:</b></u> ${request.profile}
-                    <u><b>GAME:</b></u> ${request.gameName}
-                    <u><b>PASSWORD:</b></u> ${request.gamePassword}
-                    <u><b>IP:</b></u> ${request.ip}`;
+                    <u><b>GAME:</b></u> ${
+                        request.gameName ? request.gameName : ''
+                    }
+                    <u><b>PASSWORD:</b></u> ${
+                        request.gamePassword ? request.gamePassword : ''
+                    }
+                    <u><b>IP:</b></u> ${request.ip ? request.ip : ''}`;
                     break;
             }
 
-            bot.telegram.sendMessage(chatId, msg, {
+            await bot.telegram.sendMessage(user.telegramId, msg, {
                 parse_mode: 'HTML',
             });
 
             return res.send(`Server got your message`);
-        } else if (user.telegramId !== '') {
-            msg = `Telegram ID ( ${user.telegramId} ) not verified, please send /verify to link your telegram with ${user.email}`;
-            bot.telegram.sendMessage(user.telegramId, msg, {
+        } else if (user.telegramId !== '' && !user.telegramVerified) {
+            msg = `Your Telegram ID ( ${user.telegramId} ) has not been verified, please send /verify to link your telegram with ${user.email}`;
+            await bot.telegram.sendMessage(user.telegramId, msg, {
                 parse_mode: 'HTML',
             });
 
