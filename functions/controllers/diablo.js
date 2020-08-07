@@ -102,7 +102,7 @@ const notify = async (req, res, next) => {
                     break;
             }
 
-            await bot.telegram.sendMessage(user.telegramId, msg, {
+            await bot.telegram.sendMessage(chatId, msg, {
                 parse_mode: 'HTML',
             });
 

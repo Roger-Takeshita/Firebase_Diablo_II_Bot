@@ -31,50 +31,6 @@ const isUserRegistered = async (chat_id, res) => {
     return false;
 };
 
-const isLinkExists = async (user, link) => {
-    try {
-        const docs = await db
-            .collection('links')
-            .where('userId', '==', user.userId)
-            .where('link', '==', link)
-            .get();
-
-        const links = [];
-        docs.forEach((doc) => {
-            links.push(doc.link);
-        });
-        return links;
-    } catch (error) {
-        throw new Error(error);
-    }
-};
-
-const getLinks = async (user) => {
-    try {
-        let strLinks = '';
-        let countLinks = 0;
-        const docs = await db
-            .collection('links')
-            .where('userId', '==', user.userId)
-            .get();
-
-        docs.forEach((doc) => {
-            strLinks += `
-    <b>---></b> <a href="${doc.data().link}">${doc.data().link}</a>`;
-            countLinks++;
-        });
-
-        if (countLinks === 0) {
-            return `You don't have any link.`;
-        }
-
-        return `Found ${countLinks} link${countLinks > 1 ? 's' : ''}:
-    ${strLinks}`;
-    } catch (error) {
-        throw new Error(error);
-    }
-};
-
 const incomingMsg = async (req, res) => {
     const telegramText =
         req.body &&
@@ -144,13 +100,9 @@ const incomingMsg = async (req, res) => {
                 
             /me - get your profile info
             /verify - link telegram account
-            /links - show all saved links
             /help - available commands`;
 
-                    keyboard = [
-                        ['/me', '/verify'],
-                        ['/links', '/help'],
-                    ];
+                    keyboard = [['/me', '/verify'], ['/help']];
                 }
 
                 return res.send({
@@ -166,7 +118,7 @@ const incomingMsg = async (req, res) => {
                 });
             case '/body':
                 chat_id = userGroupChatId;
-                user = isUserRegistered(chat_id, res);
+                user = await isUserRegistered(chat_id, res);
 
                 if (user) {
                     msg = JSON.stringify(req.body, undefined, 3);
@@ -175,52 +127,7 @@ const incomingMsg = async (req, res) => {
                 }
 
                 break;
-            case '/links':
-                chat_id = userChatId;
-                user = await isUserRegistered(chat_id, res);
-
-                if (user && user.telegramVerified) {
-                    msg = await getLinks(user);
-                } else if (user && !user.telegramVerified) {
-                    msg = `Your Telegram ID ( ${user.telegramId} ) has not been verified, please send /verify to link your telegram with ${user.email}`;
-                }
-
-                break;
             default:
-                chat_id = userChatId;
-                user = await isUserRegistered(chat_id, res);
-
-                if (user && type === 'private') {
-                    const regEx = /^(http|https|ftp|ftps)\:\/\/[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,3}(\/\S*)?/i;
-                    const isAnUrl = incomingMessage.match(regEx);
-
-                    if (isAnUrl) {
-                        const link = isAnUrl[0];
-                        const links = await isLinkExists(user, link);
-
-                        if (links.length > 0) {
-                            msg = 'This link already exists!';
-                            return res.send({
-                                method: 'sendMessage',
-                                chat_id,
-                                text: msg,
-                                parse_mode: 'HTML',
-                            });
-                        }
-
-                        return await db
-                            .collection('links')
-                            .add({ link, userId: user.userId });
-                    }
-
-                    return res.send({
-                        method: 'sendMessage',
-                        chat_id,
-                        text: `Hello ${first_name}, \n You sent us message: ${incomingMessage}`,
-                        parse_mode: 'HTML',
-                    });
-                }
-
                 break;
         }
 
@@ -229,6 +136,7 @@ const incomingMsg = async (req, res) => {
             chat_id,
             text: msg,
             parse_mode: 'HTML',
+            disable_web_page_preview: true,
         });
     }
 
