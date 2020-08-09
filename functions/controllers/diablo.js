@@ -14,6 +14,7 @@ const formatObject = (body) => {
         'code',
         'message',
         'profile',
+        'userAcc',
         'gameName',
         'gamePassword',
         'ip',
@@ -67,7 +68,9 @@ const notify = async (req, res, next) => {
 
                     <u><b>PROFILE:</b></u> ${request.profile}
                     <u><b>GAME:</b></u> ${request.gameName}
-                    <u><b>PASSWORD:</b></u> ${request.gamePassword}
+                    <u><b>PASSWORD:</b></u> ${
+                        request.gamePassword ? request.gamePassword : ''
+                    }
                     <u><b>IP:</b></u> ${request.ip}`;
 
                     break;
@@ -76,7 +79,12 @@ const notify = async (req, res, next) => {
                     msg = `<b>${request.message}</b>
 
                     <u><b>PROFILE:</b></u> ${request.profile}
-                    <u><b>GAME:</b></u> ${request.gameName}`;
+                    <u><b>GAME:</b></u> ${
+                        request.gameName ? request.gameName : ''
+                    }
+                    <u><b>USER ACC:</b></u> ${
+                        request.userAcc ? request.userAcc : ''
+                    }`;
 
                     break;
                 case 'Soj':
@@ -98,7 +106,7 @@ const notify = async (req, res, next) => {
                     <u><b>PASSWORD:</b></u> ${
                         request.gamePassword ? request.gamePassword : ''
                     }
-                    <u><b>IP:</b></u> ${request.ip ? request.ip : ''}`;
+                    <u><b>IP:</b></u> ${request.ip}`;
                     break;
             }
 
