@@ -20,13 +20,13 @@ app.use('/diablo', diabloPath);
 app.use('/telegram', telegramPath);
 
 bot.catch((error, ctx) => {
-    console.log(`Ooops, encountered an error for ${ctx.updateType}`, error);
+    // console.log(`Ooops, encountered an error for ${ctx.updateType}`, error);
     bot.telegram.sendMessage(ctx.chat.id, `ERROR: ${error.message}`);
 });
 
 app.use((error, req, res, next) => {
     const statusCode = res.statusCode === 200 ? 400 : res.statusCode;
-    console.error(error);
+
     res.status(statusCode).json({
         message: error.message,
     });

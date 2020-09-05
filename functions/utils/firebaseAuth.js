@@ -9,7 +9,6 @@ module.exports = (req, res, next) => {
     ) {
         token = req.headers.authorization.split('Bearer ')[1];
     } else {
-        console.error('Not token found');
         return res.status(403).json({ error: 'Unauthorized!' });
     }
 
@@ -29,7 +28,6 @@ module.exports = (req, res, next) => {
             return next();
         })
         .catch((error) => {
-            console.error('Error while verifying token', error);
             return res
                 .status(403)
                 .json({ message: 'Error while verifying token', error });

@@ -34,9 +34,10 @@ const formatObject = (body) => {
     return allowedFields;
 };
 
-const sendEmailVerification = async (user, res) => {
+const sendEmailVerification = async (res) => {
     try {
-        await user.sendEmailVerification();
+        const user = firebase.auth().currentUser;
+        user.sendEmailVerification();
         return res.json({
             message: `An email was sent to ${user.email}, please verify first and before log in.`,
         });
@@ -76,7 +77,7 @@ const signup = async (req, res, next) => {
         await db
             .doc(`/users/${newUserAuthentication.user.uid}`)
             .set(newUserProfile);
-        return sendEmailVerification(newUserAuthentication.user, res);
+        return sendEmailVerification(res);
     } catch (error) {
         if (error.code === 'auth/email-already-in-use') {
             res.status(400);
@@ -102,7 +103,7 @@ const login = async (req, res) => {
             .signInWithEmailAndPassword(user.email, user.password);
 
         if (!request.user.emailVerified) {
-            return sendEmailVerification(request.user, res);
+            return sendEmailVerification(res);
         }
 
         const token = await request.user.getIdToken();
@@ -205,8 +206,6 @@ const updateProfile = async (req, res, next) => {
             message: 'Password has been updated successfully',
         });
     } catch (error) {
-        console.error(error);
-
         if (error.code === 'auth/wrong-password') {
             res.status(403);
             next({
